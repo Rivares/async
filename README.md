@@ -14,13 +14,20 @@ ___
 
 ## Options
 
-* `not options`   *facke line (\"path\" ... \"path\")*
+* `not options`   *to future to make ip and port (\"path\" ... \"path\")*
 
 ___
 
 ## Example
 
+Run
 ```shell
 ./client
 ./server
+```
+
+Stop
+```shell
+top
+kill PID
 ```
