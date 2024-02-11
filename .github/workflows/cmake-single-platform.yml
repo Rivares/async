@@ -1,0 +1,112 @@
+# This starter workflow is for a CMake project running on a single platform. There is a different starter workflow if you need cross-platform coverage.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-multi-platform.yml
+name: CMake on a single platform
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  job_build:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: sudo apt-get update
+      - run: sudo apt-get install cmake libboost-test-dev -y
+      - run: sudo apt-get install libgtest-dev libgmock-dev libtbb-dev -y
+      - run: sudo apt-get install build-essential libgl1-mesa-dev
+      - run: sudo apt-get install libboost-all-dev
+      - run: git clone https://github.com/gperftools/gperftools && cd gperftools && ./autogen.sh && ./configure && make && sudo make install
+      - run: sudo ln -s /usr/local/lib/libprofiler.so /usr/lib/libprofiler.so.0
+      - run: sudo apt install -yq golang
+      - run: go install github.com/google/pprof@latest
+      - run: sudo mkdir /usr/src/googletest/build
+      - run: cd /usr/src/googletest/build && sudo rm -f ../CMakeCache.txt && sudo cmake ../ && sudo make
+      - run: sudo cp /usr/src/googletest/build/lib/*.a /usr/lib
+      - run: sudo ln -s /usr/lib/libgtest.a /usr/local/lib/libgtest.a
+      - run: sudo ln -s /usr/lib/libgtest_main.a /usr/local/lib/libgtest_main.a
+      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+      - run: cmake --build .
+      - run: cmake --build . --target test
+      - run: cmake --build . --target package
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./async-0.0.${{ github.run_number }}-Linux.deb
+          asset_name: async-0.0.${{ github.run_number }}-Linux.deb
+          asset_content_type: application/vnd.debian.binary-package
+      - name: Upload deb package for job_run
+        uses: actions/upload-artifact@v3
+        with:
+          name: package
+          path: ./async-0.0.${{ github.run_number }}-Linux.deb
+  job_run:
+    needs: [job_build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download deb package
+        uses: actions/download-artifact@v3
+        with:
+          name: package
+      - shell: bash
+        run: |
+          sudo apt install ./async-0.0.${{ github.run_number }}-Linux.deb
+      - name: Checking
+        run: |
+          sudo cat async | md5sum
+
+  job_docs:
+    needs: [job_build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: "true"
+
+      - name: Install Doxygen
+        run: sudo apt-get install doxygen -y
+        shell: bash
+
+      - name: Generate Doxygen Documentation
+        run: doxygen
+        shell: bash
+
+      - name: Create .nojekyll
+        run: sudo touch ${{ inputs.folder }}/.nojekyll
+        shell: bash
+      
+      # Deploy the HTML documentation to GitHub Pages
+      - name: GH Pages Deployment
+        uses: actions/checkout@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./doc/html/
+          enable_jekyll: false
+          allow_empty_commit: false
+          force_orphan: true
+          publish_branch: main
+
