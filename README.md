@@ -7,8 +7,6 @@
 * client
 * server
 
-
-
 > client send packet. server receive packet.
 ___
 
@@ -18,15 +16,27 @@ ___
 
 ___
 
-## Example
+## Work with program
 
-Run
+1. Edit ip address and port
 ```shell
-./client
-./server
+nano ./client_/client.cpp
+nano ./server_/server.cpp
 ```
 
-Stop
+2. Build
+```shell
+cmake
+make
+```
+
+3. Run
+```shell
+./client_/client
+./server_/server
+```
+
+4. Stop
 ```shell
 top
 kill PID
