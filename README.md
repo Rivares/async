@@ -1,13 +1,13 @@
 # async
 
-## Utility for transferinf UDP packets
+## Utility for transferring data over UDP
 
-**Features:**
+**Content:**
 
 * client
 * server
 
-> client send packet. server receive packet.
+> client send udp packet. server receive udp packet.
 ___
 
 ## Options
