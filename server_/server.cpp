@@ -78,11 +78,11 @@ private:
 
 public:
     Server(boost::asio::io_service& service)
-        : m_socket(service, udp::endpoint(address::from_string("192.168.131.4"), 5200))
+        : m_socket(service, udp::endpoint(address::from_string("127.0.0.1"), 5200))
     {        
         std::cout << "Server is connected: " << m_socket.is_open() << std::endl;
         
-        m_endpoint = udp::endpoint(address::from_string("192.168.131.4"), 5200);
+        m_endpoint = udp::endpoint(address::from_string("127.0.0.1"), 5200);
     }
 
     void readStream()
@@ -126,7 +126,7 @@ public:
         printf("%s::%s() number = %lu, timestamp = %lu\n\n", typeid(*this).name(), __func__
         , packet->number
         , packet->timestamp
-	    ); // TODO / YURIY / Delete
+	    );
 
 
         readStream();
@@ -137,18 +137,18 @@ public:
 class Base
 {
     boost::asio::io_service service;
-    std::shared_ptr<Server> m_Server;
+    std::shared_ptr<Server> m_server;
     std::thread m_thread;
 
 public:
     Base()
     {
-        m_Server = std::make_shared<Server>(service);
+        m_server = std::make_shared<Server>(service);
         m_thread = std::thread(&Base::runThread, this);
     }
     void runThread()
     {
-        m_Server->readStream();
+        m_server->readStream();
         service.run();
     }
     ~Base()

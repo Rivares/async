@@ -90,7 +90,7 @@ public:
     {        
         std::cout << "Client is connected: " << m_socket.is_open() << std::endl;
         
-        m_endpoint = udp::endpoint(address::from_string("192.168.131.4"), 5200);
+        m_endpoint = udp::endpoint(address::from_string("127.0.0.1"), 5200);
     }
 
     void startSend()
@@ -98,13 +98,25 @@ public:
         std::cout << "Send: " << std::endl;
 
 
-
+        // ----- Make package -----
         DzlPacket* packet = (DzlPacket*)&m_packets[m_lastSaveIdx].data;
         if (!packet)
         {	std::cout << "packet is not exist!";	}
 
         packet->number = m_lastSaveIdx + 1;
         packet->timestamp = 1;
+        // -----  -----
+
+       printf("\n%s::%s() number = %lu, timestamp = %lu\n", typeid(*this).name(), __func__
+        , packet->number
+        , packet->timestamp
+        );
+
+        int index = m_lastSaveIdx + 1;
+        if (index >= 50) {
+            index = 0;
+        }
+        m_lastSaveIdx = index;
 
 
         if (m_timeMeter.isStarted)
@@ -115,18 +127,6 @@ public:
              , m_timeMeter.getTimeCycle().count()); // TODO / YURIY / Delete
         }
         m_timeMeter.startMetr();
-
-    	printf("\n%s::%s() number = %lu, timestamp = %lu\n", typeid(*this).name(), __func__
-    	, packet->number
-    	, packet->timestamp
-        ); // TODO / YURIY / Delete
-
-        int index = m_lastSaveIdx + 1;
-        if (index >= 50) {
-            index = 0;
-        }
-        m_lastSaveIdx = index;
-
 
 
 	    m_socket.async_send_to(boost::asio::buffer(&(m_packets[m_lastSendIdx].data), sizeof(DzlPacketData)),
@@ -142,38 +142,26 @@ public:
     void handSend(const boost::system::error_code& error, std::size_t size)
     {
 	    if (error) {
-            printf("%s::%s() source ip = %s, port = %hu, size = %lu\n\n", typeid(*this).name(), __func__
-                , m_endpoint.address().to_v4().to_string().c_str()
-                , m_endpoint.port()
-                , m_endpoint.size()
-                ); // TODO / YURIY / Delete
-
             printf("%s::%s() Error message: %s\n\n", typeid(*this).name(), __func__
                 , error.message().c_str()
-                ); // TODO / YURIY / Delete
-
-
-            m_reconnect = true;
-
-
+                );
         }
         else if (size == m_packets[m_lastSendIdx].data.size())
         {
-            m_lastSendIdx++;
+             m_lastSendIdx++;
             if (m_lastSendIdx >= 50) {
                 m_lastSendIdx = 0;
             }
         }
         else
         {
-            printf("%s::%s() DzlClient: Error partial sending packet! (%lu)\n\n", typeid(*this).name(), __func__
+            printf("%s::%s() Client: Error partial sending packet! (%lu)\n\n", typeid(*this).name(), __func__
             , size
-            ); // TODO / YURIY / Delete
-
+            ); 
         }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        // запрос на прием следующего пакета
         startSend();
     }
 };
