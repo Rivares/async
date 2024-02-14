@@ -14,7 +14,7 @@ using namespace boost::asio::ip;
 
 struct DzlPacketData
 {
-	std::array<uint8_t, 1472> data;
+	std::array<uint8_t, 30> data;
 
 	DzlPacketData() {
 	}
@@ -87,36 +87,20 @@ private:
 public:
     Client(boost::asio::io_service& service)
         : m_socket(service, udp::endpoint(udp::v4(), 0))
-    {        
-        std::cout << "Client is connected: " << m_socket.is_open() << std::endl;
-        
+    {
         m_endpoint = udp::endpoint(address::from_string("127.0.0.1"), 5200);
     }
 
     void startSend()
     {
-        std::cout << "Send: " << std::endl;
-
-
         // ----- Make package -----
         DzlPacket* packet = (DzlPacket*)&m_packets[m_lastSaveIdx].data;
         if (!packet)
-        {	std::cout << "packet is not exist!";	}
+        {	return;	}
 
         packet->number = m_lastSaveIdx + 1;
         packet->timestamp = 1;
         // -----  -----
-
-       printf("\n%s::%s() number = %lu, timestamp = %lu\n", typeid(*this).name(), __func__
-        , packet->number
-        , packet->timestamp
-        );
-
-        int index = m_lastSaveIdx + 1;
-        if (index >= 50) {
-            index = 0;
-        }
-        m_lastSaveIdx = index;
 
 
         if (m_timeMeter.isStarted)
@@ -137,27 +121,19 @@ public:
 								boost::asio::placeholders::bytes_transferred
 									)
 							);
+
+        int index = packet->number;
+        if (index >= 50) {
+            index = 0;
+        }
+        m_lastSaveIdx = index;
+
     }
 
     void handSend(const boost::system::error_code& error, std::size_t size)
     {
 	    if (error) {
-            printf("%s::%s() Error message: %s\n\n", typeid(*this).name(), __func__
-                , error.message().c_str()
-                );
-        }
-        else if (size == m_packets[m_lastSendIdx].data.size())
-        {
-             m_lastSendIdx++;
-            if (m_lastSendIdx >= 50) {
-                m_lastSendIdx = 0;
-            }
-        }
-        else
-        {
-            printf("%s::%s() Client: Error partial sending packet! (%lu)\n\n", typeid(*this).name(), __func__
-            , size
-            ); 
+            return;
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
