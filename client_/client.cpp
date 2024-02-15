@@ -36,7 +36,14 @@ struct DzlPacket
 #pragma pack()
 
 
-#include <future> 
+#include <mutex>
+#include <condition_variable>
+ 
+
+ 
+
+ 
+
 
 class Client
 {
@@ -46,17 +53,16 @@ private:
 
 	std::array<DzlPacketData, 50>	m_packets;	
 
-    std::atomic<bool> isStarted;
-    std::chrono::system_clock::time_point startPoint;
-    std::chrono::system_clock::time_point stopPoint;
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool ready = false;
 
-    std::atomic<std::chrono::microseconds> timeCycle;
-
-    std::future<uint64_t> func;
+    std::thread thr;
 
 public:
     Client(boost::asio::io_service& service)
         : m_socket(service, udp::endpoint(udp::v4(), 0))
+        // , thr(std::thread(&Client::timer, this))        
     {
         m_endpoint = udp::endpoint(address::from_string("127.0.0.1"), 5200);
     }
@@ -71,6 +77,12 @@ public:
 								boost::asio::placeholders::bytes_transferred
 									)
 							);
+
+
+        ready = true;
+        cv.notify_all();
+        if (thr.joinable())
+        {   thr.join(); }
     }
 
     void handSend(const boost::system::error_code& error, std::size_t size)
@@ -79,26 +91,22 @@ public:
             return;
         }
 
-        auto th = std::thread([&](){
-            if (isStarted.load())
-            {
-                stopPoint = std::chrono::high_resolution_clock::now();
-                timeCycle.store(std::chrono::duration_cast<std::chrono::microseconds>(stopPoint - startPoint));
+        ready = false;
+        thr = (std::thread(&Client::timer, this));
 
-                isStarted.store(false);
-            }
-            startPoint = std::chrono::high_resolution_clock::now();
-            isStarted.store(true);
-
-            printf("= %lu \n"
-            , timeCycle.load().count());
-        });
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-
-        th.join();
-
-
+        
         startSend();        
+    }
+
+    void timer()
+    {
+       auto now = std::chrono::system_clock::now();
+
+       std::unique_lock<std::mutex> lock(mutex);
+       cv.wait(lock, [&]() { return ready; });
+       printf(": %lu\n"
+       , std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count());
     }
 };
 
