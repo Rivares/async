@@ -1,177 +1,122 @@
-
-#include <boost/bind.hpp>
-#include <boost/asio.hpp>
-
-#include <iostream>
-#include <string>
-#include <thread>
-#include <memory>
-#include <vector>
-#include <array>
-
-using namespace boost::asio::ip;
-
+#include <bits/stdc++.h> 
+#include <stdlib.h> 
+#include <unistd.h> 
+#include <string.h> 
+#include <sys/types.h> 
+#include <sys/socket.h> 
+#include <arpa/inet.h> 
+#include <netinet/in.h> 
+   
+#define PORT     5200 
+   
 
 struct DzlPacketData
 {
-	std::array<uint8_t, 30> data;
+    std::array<uint8_t, 30> data;
 
-	DzlPacketData() {
-	}
+    DzlPacketData() {
+    }
 };
 
 #pragma pack(1)
 struct DzlPacket
 {
 
-	uint64_t		timestamp; // время цикла
-	uint64_t		number; // номер пакета
-	std::array<uint8_t, 1>	data; // данные
+    uint64_t        timestamp; // время цикла
+    uint64_t        number; // номер пакета
+    std::array<uint8_t, 1>  data; // данные
 
-	DzlPacket() {
-		timestamp = 0;
-		number = 0;
-	}
+    DzlPacket() {
+        timestamp = 0;
+        number = 0;
+    }
 };
 #pragma pack()
 
 
 struct ClockCycler
 {
-	std::atomic<bool> isStarted;
-	std::chrono::system_clock::time_point startPoint;
-	std::chrono::system_clock::time_point stopPoint;
+    std::atomic<bool> isStarted;
+    std::chrono::system_clock::time_point startPoint;
+    std::chrono::system_clock::time_point stopPoint;
 
-	std::atomic<std::chrono::microseconds> timeCycle;
+    std::atomic<std::chrono::microseconds> timeCycle;
 
-	ClockCycler() = default;
+    ClockCycler() = default;
 
-	void startMetr()
-	{
-		startPoint = std::chrono::high_resolution_clock::now();
-		isStarted = true;
-	}
-
-	void stopMetr()
-	{
-		if (isStarted)
-		{
-			stopPoint = std::chrono::high_resolution_clock::now();
-			timeCycle.store(std::chrono::duration_cast<std::chrono::microseconds>(stopPoint - startPoint));
-
-			isStarted = false;
-		}
-	}
-
-	std::chrono::microseconds getTimeCycle() const
-	{
-		return timeCycle.load();
-	}
-};
-
-class Client
-{
-private:    
-    udp::socket m_socket;
-    udp::endpoint m_endpoint;
-
-	std::array<DzlPacketData, 50>	m_packets;	
-
-	bool				m_reconnect; // переустановить соединение
-	
-	volatile int		m_lastSaveIdx; //
-	volatile int		m_lastSendIdx; //
-
-    ClockCycler m_timeMeter;
-
-public:
-    Client(boost::asio::io_service& service)
-        : m_socket(service, udp::endpoint(udp::v4(), 0))
+    void startMetr()
     {
-        m_endpoint = udp::endpoint(address::from_string("127.0.0.1"), 5200);
+        startPoint = std::chrono::high_resolution_clock::now();
+        isStarted.store(true);
     }
 
-    void startSend()
+    void stopMetr()
     {
-        // ----- Make package -----
-        DzlPacket* packet = (DzlPacket*)&m_packets[m_lastSaveIdx].data;
-        if (!packet)
-        {	return;	}
-
-        packet->number = m_lastSaveIdx + 1;
-        packet->timestamp = 1;
-        // -----  -----
-
-
-        if (m_timeMeter.isStarted)
+        if (isStarted.load())
         {
-            m_timeMeter.stopMetr();
+            stopPoint = std::chrono::high_resolution_clock::now();
+            timeCycle.store(std::chrono::duration_cast<std::chrono::microseconds>(stopPoint - startPoint));
 
-            printf("%s::%s() Delay = %lu microsec\n", typeid(*this).name(), __func__
-             , m_timeMeter.getTimeCycle().count()); // TODO / YURIY / Delete
+            isStarted.store(false);
         }
-        m_timeMeter.startMetr();
-
-
-	    m_socket.async_send_to(boost::asio::buffer(&(m_packets[m_lastSendIdx].data), sizeof(DzlPacketData)),
-							m_endpoint,
-							boost::bind(&Client::handSend,
-								this,
-								boost::asio::placeholders::error,
-								boost::asio::placeholders::bytes_transferred
-									)
-							);
-
-        int index = packet->number;
-        if (index >= 50) {
-            index = 0;
-        }
-        m_lastSaveIdx = index;
-
     }
 
-    void handSend(const boost::system::error_code& error, std::size_t size)
+    std::chrono::microseconds getTimeCycle() const
     {
-	    if (error) {
-            return;
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-
-        startSend();
+        return timeCycle.load();
     }
 };
 
-class Base
-{
-    boost::asio::io_service service;
-    std::shared_ptr<Client> m_client;
-    std::thread m_thread;
-
-public:
-    Base()
-    {
-        m_client = std::make_shared<Client>(service);
-        m_thread = std::thread(&Base::runThread, this);
-    }
-    void runThread()
-    {
-        m_client->startSend();
-        service.run();
-    }
-    ~Base()
-    {
-        if (m_thread.joinable())
-        {   m_thread.join();    }
-
-        service.stop();
-    }
-};
 
 
 int main(int argc, char *argv[])
 {
-    Base obj;
+    int sockfd; 
+    char buffer[30]; 
+    const char *hello = "Hello from client"; 
+    struct sockaddr_in     servaddr; 
+
+    ClockCycler m_timeMeter;
+
+
+    // Creating socket file descriptor 
+    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
+        perror("socket creation failed"); 
+        exit(EXIT_FAILURE); 
+    } 
+
+    memset(&servaddr, 0, sizeof(servaddr)); 
+       
+    // Filling server information 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_port = htons(PORT); 
+    servaddr.sin_addr.s_addr = INADDR_ANY;   
+
+
+
+    for(;;)
+    {
+        if (m_timeMeter.isStarted)
+        {
+            m_timeMeter.stopMetr();
+
+            printf("= %lu \n"
+             , m_timeMeter.getTimeCycle().count()); // TODO / YURIY / Delete
+        }
+        m_timeMeter.startMetr();
+
+        sendto(sockfd, (const char *)hello, strlen(hello), 
+            0, (const struct sockaddr *) &servaddr,  
+                sizeof(servaddr));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+
+    close(sockfd);
 
     return 0;
 }
+
+
+
